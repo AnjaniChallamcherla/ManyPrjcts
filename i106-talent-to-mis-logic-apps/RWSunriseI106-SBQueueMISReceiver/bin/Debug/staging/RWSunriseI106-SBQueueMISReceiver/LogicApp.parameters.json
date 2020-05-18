@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "logicAppName": {
+      "value": "RWSunrise-I106-SBQueueMISReceiver"
+    },
+    "supportEmailAddress": {
+      "value": "anjani.challamcherla@robertwalters.com"
+    },
+    "servicebus_1_connectionString": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/51132d16-72f5-491f-90db-30b922b816e6/resourceGroups/SecretKeyVaultRG/providers/Microsoft.KeyVault/vaults/RWSecretKeyVault"
+        },
+        "secretName": "RWSunrise-ServiceBus-ConnStr-PROD"
+      }
+    },
+    "oracle_1_username": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/51132d16-72f5-491f-90db-30b922b816e6/resourceGroups/SecretKeyVaultRG/providers/Microsoft.KeyVault/vaults/RWSecretKeyVault"
+        },
+        "secretName": "RWSunrise-Oracle-TalentMIS-PROD-Username"
+      }
+    },
+    "oracle_1_password": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/51132d16-72f5-491f-90db-30b922b816e6/resourceGroups/SecretKeyVaultRG/providers/Microsoft.KeyVault/vaults/RWSecretKeyVault"
+        },
+        "secretName": "RWSunrise-Oracle-TalentMIS-PROD-Password"
+      }
+    }
+  }
+}

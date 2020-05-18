@@ -1,0 +1,744 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "logicAppName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "metadata": {
+        "description": "Name of the Logic App."
+      },
+      "defaultValue": ""
+    },
+    "SupportEmailAddress": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Email address for error handling"
+      },
+      "defaultValue": ""
+    },
+    "logicAppLocation": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "allowedValues": [
+        "[resourceGroup().location]",
+        "eastasia",
+        "southeastasia",
+        "centralus",
+        "eastus",
+        "eastus2",
+        "westus",
+        "northcentralus",
+        "southcentralus",
+        "northeurope",
+        "westeurope",
+        "japanwest",
+        "japaneast",
+        "brazilsouth",
+        "australiaeast",
+        "australiasoutheast",
+        "southindia",
+        "centralindia",
+        "westindia",
+        "canadacentral",
+        "canadaeast",
+        "uksouth",
+        "ukwest",
+        "westcentralus",
+        "westus2",
+        "koreacentral",
+        "koreasouth",
+        "francecentral",
+        "francesouth",
+        "southafricanorth",
+        "southafricawest"
+      ],
+      "metadata": {
+        "description": "Location of the Logic App."
+      }
+    },
+    "servicebus_1_Connection_Name": {
+      "type": "string",
+      "defaultValue": "servicebus"
+    },
+    "servicebus_1_Connection_DisplayName": {
+      "type": "string",
+      "defaultValue": "RWSunrise"
+    },
+    "servicebus_1_connectionString": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Azure Service Bus Connection String"
+      }
+    },
+    "oracle_1_Connection_Name": {
+      "type": "string",
+      "defaultValue": "oracle"
+    },
+    "oracle_1_Connection_DisplayName": {
+      "type": "string",
+      "defaultValue": "Oracle Talent PROD Staging"
+    },
+    "oracle_1_server": {
+      "type": "string",
+      "metadata": {
+        "description": "Specify the Oracle Server. If a port or SID is required, specify in the form of ServerName:Port/SID."
+      },
+      "defaultValue": "ZUK1.WORLD"
+    },
+    "oracle_1_authType": {
+      "type": "string",
+      "metadata": {
+        "description": "Authentication type to connect to your database"
+      },
+      "defaultValue": "basic",
+      "allowedValues": [
+        "basic"
+      ]
+    },
+    "oracle_1_username": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Username credential"
+      }
+    },
+    "oracle_1_password": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Password credential"
+      }
+    },
+    "oracle_1_gateway_id": {
+      "type": "string",
+      "defaultValue": "/subscriptions/51132d16-72f5-491f-90db-30b922b816e6/resourceGroups/RW-RG-NE-DataGateway/providers/Microsoft.Web/connectionGateways/DataGWProd-ANE"
+    },
+    "office365_1_Connection_Name": {
+      "type": "string",
+      "defaultValue": "office365"
+    },
+    "office365_1_Connection_DisplayName": {
+      "type": "string",
+      "defaultValue": "ERPservicealerts@robertwalters.com"
+    }
+  },
+  "variables": {},
+  "resources": [
+    {
+      "name": "[parameters('logicAppName')]",
+      "type": "Microsoft.Logic/workflows",
+      "location": "[parameters('logicAppLocation')]",
+      "tags": {
+        "displayName": "LogicApp"
+      },
+      "apiVersion": "2016-06-01",
+      "properties": {
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "actions": {
+            "Oracle_Scope": {
+              "type": "Scope",
+              "actions": {
+                "Check_for_sync_in_operation": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['oracle']['connectionId']"
+                      }
+                    },
+                    "method": "get",
+                    "path": "/datasets/default/tables/@{encodeURIComponent(encodeURIComponent('[TALENT].[TALENT_LAST_SYNCH_TIME]'))}/items",
+                    "queries": {
+                      "$filter": "SYNCH_IN_PROGRESS eq 1"
+                    }
+                  },
+                  "runAfter": {}
+                },
+                "Is_there_a_sync_in_process": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@length(body('Check_for_sync_in_operation')?['value'])",
+                          0
+                        ]
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Check_Sunrise_LA_jobs": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['oracle']['connectionId']"
+                          }
+                        },
+                        "method": "get",
+                        "path": "/datasets/default/tables/@{encodeURIComponent(encodeURIComponent('[TALENT].[TALENT_LAST_LOGICAPP_TIME]'))}/items",
+                        "queries": {
+                          "$filter": "LAPP_IN_PROGRESS eq 1"
+                        }
+                      },
+                      "runAfter": {}
+                    },
+                    "Is_there_a_logic_app_job_in_progress": {
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          {
+                            "equals": [
+                              "@length(body('Check_Sunrise_LA_jobs')?['value'])",
+                              0
+                            ]
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Insert_Sync_in_process": {
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['oracle']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "body": {
+                              "TALENT_LAST_LOGICAPP_TIME_KEY": 0,
+                              "START_TIME": "@{utcNow()}"
+                            },
+                            "path": "/datasets/default/tables/@{encodeURIComponent(encodeURIComponent('[TALENT].[TALENT_LAST_LOGICAPP_TIME]'))}/items"
+                          },
+                          "runAfter": {}
+                        },
+                        "Set_Sync_Time_key": {
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "Sync Time Key",
+                            "value": "@body('Insert_Sync_in_process')?['TALENT_LAST_LOGICAPP_TIME_KEY']"
+                          },
+                          "runAfter": {
+                            "Insert_Sync_in_process": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Update_sync_in_process": {
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['oracle']['connectionId']"
+                              }
+                            },
+                            "method": "patch",
+                            "body": {
+                              "TALENT_LAST_LOGICAPP_TIME_KEY": "@variables('Sync Time Key')",
+                              "START_TIME": "@body('Insert_Sync_in_process')['START_TIME']",
+                              "END_TIME": "@{utcNow()}",
+                              "LAPP_IN_PROGRESS": 0
+                            },
+                            "path": "/datasets/default/tables/@{encodeURIComponent(encodeURIComponent('[TALENT].[TALENT_LAST_LOGICAPP_TIME]'))}/items/@{encodeURIComponent(encodeURIComponent(variables('Sync Time Key')))}"
+                          },
+                          "runAfter": {
+                            "Switch": [
+                              "Succeeded",
+                              "Failed",
+                              "Skipped",
+                              "TimedOut"
+                            ]
+                          }
+                        },
+                        "Switch": {
+                          "type": "Switch",
+                          "expression": "@triggerBody()?['MessageId']",
+                          "cases": {
+                            "Worker_Case": {
+                              "case": "byod/talent/Workers",
+                              "actions": {
+                                "SaveWorkers": {
+                                  "type": "Workflow",
+                                  "inputs": {
+                                    "host": {
+                                      "triggerName": "manual",
+                                      "workflow": {
+                                        "id": "/subscriptions/51132d16-72f5-491f-90db-30b922b816e6/resourceGroups/RW-RG-NE-LogicApps/providers/Microsoft.Logic/workflows/RWSunriseI106-SaveWorkerToMIS"
+                                      }
+                                    },
+                                    "headers": {
+                                      "content-type": "application/json"
+                                    },
+                                    "body": {
+                                      "items": "@json(base64ToString(triggerBody().ContentData))",
+                                      "querySubject": "@triggerBody()?['MessageId']"
+                                    }
+                                  },
+                                  "runAfter": {}
+                                }
+                              }
+                            },
+                            "Employment_detail_Case": {
+                              "case": "byod/talent/EmploymentDetails",
+                              "actions": {
+                                "SaveEmploymentDetails": {
+                                  "type": "Workflow",
+                                  "inputs": {
+                                    "host": {
+                                      "triggerName": "manual",
+                                      "workflow": {
+                                        "id": "/subscriptions/51132d16-72f5-491f-90db-30b922b816e6/resourceGroups/RW-RG-NE-LogicApps/providers/Microsoft.Logic/workflows/RWSunriseI106-SaveEmploymentToMIS"
+                                      }
+                                    },
+                                    "headers": {
+                                      "content-type": "application/json"
+                                    },
+                                    "body": {
+                                      "items": "@json(base64ToString(triggerBody().ContentData))",
+                                      "querySubject": "@triggerBody()?['MessageId']"
+                                    }
+                                  },
+                                  "runAfter": {}
+                                }
+                              }
+                            },
+                            "Employment_term_Case": {
+                              "case": "byod/talent/EmploymentTerms",
+                              "actions": {
+                                "SaveEmploymentTerms": {
+                                  "type": "Workflow",
+                                  "inputs": {
+                                    "host": {
+                                      "triggerName": "manual",
+                                      "workflow": {
+                                        "id": "/subscriptions/51132d16-72f5-491f-90db-30b922b816e6/resourceGroups/RW-RG-NE-LogicApps/providers/Microsoft.Logic/workflows/RWSunriseI106-SaveEmploymentToMIS"
+                                      }
+                                    },
+                                    "headers": {
+                                      "content-type": "application/json"
+                                    },
+                                    "body": {
+                                      "items": "@json(base64ToString(triggerBody().ContentData))",
+                                      "querySubject": "@triggerBody()?['MessageId']"
+                                    }
+                                  },
+                                  "runAfter": {}
+                                }
+                              }
+                            },
+                            "Position_Case": {
+                              "case": "byod/talent/Positions",
+                              "actions": {
+                                "SavePositions": {
+                                  "type": "Workflow",
+                                  "inputs": {
+                                    "host": {
+                                      "triggerName": "manual",
+                                      "workflow": {
+                                        "id": "/subscriptions/51132d16-72f5-491f-90db-30b922b816e6/resourceGroups/RW-RG-NE-LogicApps/providers/Microsoft.Logic/workflows/RWSunriseI106-SavePositionToMIS"
+                                      }
+                                    },
+                                    "headers": {
+                                      "content-type": "application/json"
+                                    },
+                                    "body": {
+                                      "items": "@json(base64ToString(triggerBody().ContentData))",
+                                      "querySubject": "@triggerBody()?['MessageId']"
+                                    }
+                                  },
+                                  "runAfter": {}
+                                }
+                              }
+                            },
+                            "Position_Assignments_Case": {
+                              "case": "byod/talent/PositionAssignments",
+                              "actions": {
+                                "SavePositionAssignments": {
+                                  "type": "Workflow",
+                                  "inputs": {
+                                    "host": {
+                                      "triggerName": "manual",
+                                      "workflow": {
+                                        "id": "/subscriptions/51132d16-72f5-491f-90db-30b922b816e6/resourceGroups/RW-RG-NE-LogicApps/providers/Microsoft.Logic/workflows/RWSunriseI106-SavePositionToMIS"
+                                      }
+                                    },
+                                    "headers": {
+                                      "content-type": "application/json"
+                                    },
+                                    "body": {
+                                      "items": "@json(base64ToString(triggerBody().ContentData))",
+                                      "querySubject": "@triggerBody()?['MessageId']"
+                                    }
+                                  },
+                                  "runAfter": {}
+                                }
+                              }
+                            },
+                            "Position_Hierarchy_Case": {
+                              "case": "byod/talent/PositionHierarchy",
+                              "actions": {
+                                "SavePositionHierarchy": {
+                                  "type": "Workflow",
+                                  "inputs": {
+                                    "host": {
+                                      "triggerName": "manual",
+                                      "workflow": {
+                                        "id": "/subscriptions/51132d16-72f5-491f-90db-30b922b816e6/resourceGroups/RW-RG-NE-LogicApps/providers/Microsoft.Logic/workflows/RWSunriseI106-SavePositionToMIS"
+                                      }
+                                    },
+                                    "headers": {
+                                      "content-type": "application/json"
+                                    },
+                                    "body": {
+                                      "items": "@json(base64ToString(triggerBody().ContentData))",
+                                      "querySubject": "@triggerBody()?['MessageId']"
+                                    }
+                                  },
+                                  "runAfter": {}
+                                }
+                              }
+                            },
+                            "Position_Financial_Dimension_Case": {
+                              "case": "byod/talent/PositionFinancialDimensions",
+                              "actions": {
+                                "SavePositionFinancialDimensions": {
+                                  "type": "Workflow",
+                                  "inputs": {
+                                    "host": {
+                                      "triggerName": "manual",
+                                      "workflow": {
+                                        "id": "/subscriptions/51132d16-72f5-491f-90db-30b922b816e6/resourceGroups/RW-RG-NE-LogicApps/providers/Microsoft.Logic/workflows/RWSunriseI106-SavePositionToMIS"
+                                      }
+                                    },
+                                    "headers": {
+                                      "content-type": "application/json"
+                                    },
+                                    "body": {
+                                      "items": "@json(base64ToString(triggerBody().ContentData))",
+                                      "querySubject": "@triggerBody()?['MessageId']"
+                                    }
+                                  },
+                                  "runAfter": {}
+                                }
+                              }
+                            },
+                            "Employee_detail_Case": {
+                              "case": "byod/talent/EmployeeDetails",
+                              "actions": {
+                                "RWSunriseI106-SaveEmploymentToMIS": {
+                                  "type": "Workflow",
+                                  "inputs": {
+                                    "host": {
+                                      "triggerName": "manual",
+                                      "workflow": {
+                                        "id": "/subscriptions/51132d16-72f5-491f-90db-30b922b816e6/resourceGroups/RW-RG-NE-LogicApps/providers/Microsoft.Logic/workflows/RWSunriseI106-SaveEmploymentToMIS"
+                                      }
+                                    },
+                                    "headers": {
+                                      "content-type": "application/json"
+                                    },
+                                    "body": {
+                                      "items": "@json(base64ToString(triggerBody().ContentData))",
+                                      "querySubject": "@triggerBody()?['MessageId']"
+                                    }
+                                  },
+                                  "runAfter": {}
+                                }
+                              }
+                            }
+                          },
+                          "default": {
+                            "actions": {}
+                          },
+                          "runAfter": {
+                            "Set_Sync_Time_key": [
+                              "Succeeded"
+                            ]
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Check_Sunrise_LA_jobs": [
+                          "Succeeded"
+                        ]
+                      },
+                      "else": {
+                        "actions": {
+                          "Set_Sync_running": {
+                            "type": "SetVariable",
+                            "inputs": {
+                              "name": "Sync Running",
+                              "value": "@true"
+                            },
+                            "runAfter": {}
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Check_for_sync_in_operation": [
+                      "Succeeded"
+                    ]
+                  },
+                  "else": {
+                    "actions": {
+                      "Set_Sync_running_0": {
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "Sync Running",
+                          "value": "@true"
+                        },
+                        "runAfter": {}
+                      }
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "var_SyncRunning": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "var_SyncTimeKey": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Sync Time Key",
+                    "type": "Integer"
+                  }
+                ]
+              },
+              "runAfter": {}
+            },
+            "var_SyncRunning": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Sync Running",
+                    "type": "Boolean",
+                    "value": "@false"
+                  }
+                ]
+              },
+              "runAfter": {
+                "var_SyncTimeKey": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Confirm_status_of_Oracle_scope": {
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@result('Oracle_Scope')[0]['status']",
+                      "Succeeded"
+                    ]
+                  },
+                  {
+                    "equals": [
+                      "@variables('Sync Running')",
+                      "@false"
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Complete_the_message_in_a_queue": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['servicebus_1']['connectionId']"
+                      }
+                    },
+                    "method": "delete",
+                    "path": "/@{encodeURIComponent(encodeURIComponent('addtomis'))}/messages/complete",
+                    "queries": {
+                      "lockToken": "@{triggerBody()?['LockToken']}",
+                      "queueType": "Main",
+                      "sessionId": "@triggerBody()?['SessionId']"
+                    }
+                  },
+                  "runAfter": {}
+                }
+              },
+              "runAfter": {
+                "Oracle_Scope": [
+                  "Succeeded",
+                  "Failed",
+                  "Skipped",
+                  "TimedOut"
+                ]
+              },
+              "else": {
+                "actions": {
+                  "Confirm_other_sync_are_not_running_": {
+                    "type": "If",
+                    "expression": {
+                      "and": [
+                        {
+                          "equals": [
+                            "@variables('Sync Running')",
+                            "@false"
+                          ]
+                        }
+                      ]
+                    },
+                    "actions": {
+                      "Error_handling_email": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['office365_1']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "body": {
+                            "To": "@{parameters('supportEmailAddress')}",
+                            "Subject": "Error occurred on @{parameters('logicAppName')} workflow running in Azure",
+                            "Body": "Hello Support\n\nAn error occurred during the processing of records received from MIS service bus queue. This error happened inside the loop through JSON payload.\nPlease investigate this issue in Azure. The workflow project is called @{parameters('logicAppName')}.\n\nOnce this problem has been resolved the record will be re-discovered and should be processed successfully.\n\nThank you\n"
+                          },
+                          "path": "/Mail"
+                        },
+                        "runAfter": {}
+                      }
+                    },
+                    "runAfter": {}
+                  }
+                }
+              }
+            }
+          },
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            },
+            "logicAppName": {
+              "type": "String",
+              "defaultValue": "[parameters('logicAppName')]"
+            },
+            "supportEmailAddress": {
+              "type": "String",
+              "defaultValue": "[parameters('SupportEmailAddress')]"
+            }
+          },
+          "triggers": {
+            "When_a_message_is_received_in_a_queue_(peek-lock)": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['servicebus_1']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/@{encodeURIComponent(encodeURIComponent('addtomis'))}/messages/head/peek",
+                "queries": {
+                  "queueType": "Main",
+                  "sessionId": "Next Available"
+                }
+              },
+              "recurrence": {
+                "frequency": "Minute",
+                "interval": 2
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "runs": 1
+                }
+              }
+            }
+          },
+          "contentVersion": "1.0.0.0",
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "oracle": {
+                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'oracle')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('oracle_1_Connection_Name'))]",
+                "connectionName": "[parameters('oracle_1_Connection_Name')]"
+              },
+              "servicebus_1": {
+                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'servicebus')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('servicebus_1_Connection_Name'))]",
+                "connectionName": "[parameters('servicebus_1_Connection_Name')]"
+              },
+              "office365_1": {
+                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'office365')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('office365_1_Connection_Name'))]",
+                "connectionName": "[parameters('office365_1_Connection_Name')]"
+              }
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', parameters('oracle_1_Connection_Name'))]",
+        "[resourceId('Microsoft.Web/connections', parameters('servicebus_1_Connection_Name'))]",
+        "[resourceId('Microsoft.Web/connections', parameters('office365_1_Connection_Name'))]"
+      ]
+    },
+    {
+      "type": "MICROSOFT.WEB/CONNECTIONS",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('servicebus_1_Connection_Name')]",
+      "location": "[parameters('logicAppLocation')]",
+      "properties": {
+        "api": {
+          "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'servicebus')]"
+        },
+        "displayName": "[parameters('servicebus_1_Connection_DisplayName')]",
+        "parameterValues": {
+          "connectionString": "[parameters('servicebus_1_connectionString')]"
+        }
+      }
+    },
+    {
+      "type": "MICROSOFT.WEB/CONNECTIONS",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('oracle_1_Connection_Name')]",
+      "location": "[parameters('logicAppLocation')]",
+      "properties": {
+        "api": {
+          "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'oracle')]"
+        },
+        "displayName": "[parameters('oracle_1_Connection_DisplayName')]",
+        "parameterValues": {
+          "server": "[parameters('oracle_1_server')]",
+          "authType": "[parameters('oracle_1_authType')]",
+          "username": "[parameters('oracle_1_username')]",
+          "password": "[parameters('oracle_1_password')]",
+          "gateway": {
+            "id": "[parameters('oracle_1_gateway_id')]"
+          }
+        }
+      }
+    },
+    {
+      "type": "MICROSOFT.WEB/CONNECTIONS",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('office365_1_Connection_Name')]",
+      "location": "[parameters('logicAppLocation')]",
+      "properties": {
+        "api": {
+          "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'office365')]"
+        },
+        "displayName": "[parameters('office365_1_Connection_DisplayName')]"
+      }
+    }
+  ],
+  "outputs": {}
+}

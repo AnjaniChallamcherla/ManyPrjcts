@@ -1,0 +1,919 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "logicAppName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "metadata": {
+        "description": "Name of the Logic App."
+      },
+      "defaultValue": ""
+    },
+    "SqlServerName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name of SQL Server host"
+      },
+      "defaultValue": ""
+    },
+    "SqlDatabaseName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name of Database"
+      },
+      "defaultValue": ""
+    },
+    "SupportEmailAddress": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Email address for error handling"
+      },
+      "defaultValue": ""
+    },
+    "logicAppLocation": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "allowedValues": [
+        "[resourceGroup().location]",
+        "eastasia",
+        "southeastasia",
+        "centralus",
+        "eastus",
+        "eastus2",
+        "westus",
+        "northcentralus",
+        "southcentralus",
+        "northeurope",
+        "westeurope",
+        "japanwest",
+        "japaneast",
+        "brazilsouth",
+        "australiaeast",
+        "australiasoutheast",
+        "southindia",
+        "centralindia",
+        "westindia",
+        "canadacentral",
+        "canadaeast",
+        "uksouth",
+        "ukwest",
+        "westcentralus",
+        "westus2",
+        "koreacentral",
+        "koreasouth",
+        "francecentral",
+        "francesouth"
+      ],
+      "metadata": {
+        "description": "Location of the Logic App."
+      }
+    },
+    "oracle_1_Connection_Name": {
+      "type": "string",
+      "defaultValue": "oracle"
+    },
+    "oracle_1_Connection_DisplayName": {
+      "type": "string",
+      "defaultValue": "Oracle Talent PROD Staging"
+    },
+    "oracle_1_server": {
+      "type": "string",
+      "metadata": {
+        "description": "Specify the Oracle Server. If a port or SID is required, specify in the form of ServerName:Port/SID."
+      },
+      "defaultValue": "ZUK1.WORLD"
+    },
+    "oracle_1_authType": {
+      "type": "string",
+      "metadata": {
+        "description": "Authentication type to connect to your database"
+      },
+      "defaultValue": "basic",
+      "allowedValues": [
+        "basic"
+      ]
+    },
+    "oracle_1_username": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Username credential"
+      }
+    },
+    "oracle_1_password": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Password credential"
+      }
+    },
+    "oracle_1_gateway_id": {
+      "type": "string",
+      "defaultValue": "/subscriptions/51132d16-72f5-491f-90db-30b922b816e6/resourceGroups/RW-RG-NE-DataGateway/providers/Microsoft.Web/connectionGateways/DataGWProd-ANE"
+    },
+    "sql_1_Connection_Name": {
+      "type": "string",
+      "defaultValue": "sql"
+    },
+    "sql_1_Connection_DisplayName": {
+      "type": "string",
+      "defaultValue": "Talent BYOD PROD"
+    },
+    "sql_1_server": {
+      "type": "string",
+      "metadata": {
+        "description": "SQL server name"
+      },
+      "defaultValue": "byodb-prod.database.windows.net"
+    },
+    "sql_1_database": {
+      "type": "string",
+      "metadata": {
+        "description": "SQL database name"
+      },
+      "defaultValue": "TALENT-BYODB-PROD"
+    },
+    "sql_1_username": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Username credential"
+      }
+    },
+    "sql_1_password": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Password credential"
+      }
+    },
+    "sql_1_sqlConnectionString": {
+      "type": "securestring",
+      "metadata": {
+        "description": "SQL Connection String"
+      }
+    },
+    "office365_1_Connection_Name": {
+      "type": "string",
+      "defaultValue": "office365"
+    },
+    "office365_1_Connection_DisplayName": {
+      "type": "string",
+      "defaultValue": "ERPservicealerts@robertwalters.com"
+    }
+  },
+  "variables": {},
+  "resources": [
+    {
+      "name": "[parameters('logicAppName')]",
+      "type": "Microsoft.Logic/workflows",
+      "location": "[parameters('logicAppLocation')]",
+      "tags": {
+        "displayName": "LogicApp"
+      },
+      "apiVersion": "2016-06-01",
+      "properties": {
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "actions": {
+            "Response": {
+              "type": "Response",
+              "kind": "http",
+              "inputs": {
+                "statusCode": 200
+              },
+              "runAfter": {
+                "Check_Oracle_BYOD_scope_status": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Oracle_BYOD_Scope": {
+              "type": "Scope",
+              "actions": {
+                "Loop_through_items": {
+                  "type": "Foreach",
+                  "foreach": "@triggerBody()['items']",
+                  "actions": {
+                    "Get_worker_position": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['oracle']['connectionId']"
+                          }
+                        },
+                        "method": "get",
+                        "path": "/datasets/default/tables/@{encodeURIComponent(encodeURIComponent('[TALENT].[TALENT_STAFF]'))}/items",
+                        "queries": {
+                          "$filter": "POSITION_ID eq '@{items('Loop_through_items')?['WorkerPosition']?['PositionId']}'",
+                          "$select": "EMAILADDRESS"
+                        }
+                      },
+                      "runAfter": {}
+                    },
+                    "Check_worker_position_status": {
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          {
+                            "greater": [
+                              "@length(body('Get_worker_position')?['value'])",
+                              0
+                            ]
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Update_row": {
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['oracle']['connectionId']"
+                              }
+                            },
+                            "method": "patch",
+                            "body": {
+                              "TALENT_ID": "@{items('Loop_through_items')?['WorkerNumber']}",
+                              "POSITION_ID": "@{items('Loop_through_items')?['WorkerPositionAssignment']?['PositionId']}",
+                              "FIRSTNAME": "@{items('Loop_through_items')?['FirstName']}",
+                              "LASTNAME": "@{items('Loop_through_items')?['LastName']}",
+                              "DATEJOINED": "@{formatDateTime(items('Loop_through_items')?['SeniorityDate'], 'yyyy-MM-dd')}",
+                              "DATELEFT": "@{formatDateTime(items('Loop_through_items')?['WorkerEmploymentDetail']?['LastDateWorked'], 'yyyy-MM-dd')}",
+                              "JOBTITLE": "@{items('Loop_through_items')?['WorkerPositionFinancialDimension']?['JobTitle']}",
+                              "LINEMANAGER_POSITION_ID": "@{items('Loop_through_items')?['WorkerPositionHierarchy']?['ParentPositionId']}",
+                              "EMPLOYEESTATUS": "@{items('Loop_through_items')?['WorkerEmploymentTerm']?['AgreementTermId']}",
+                              "EMAILADDRESS": "@{items('Loop_through_items')?['EmailAddress']}",
+                              "GENDER": "@{items('Loop_through_items')?['Gender']}",
+                              "JOBLEVEL": "@{items('Loop_through_items')?['WorkerPositionFinancialDimension']?['JobLevel']}",
+                              "ONSITE": "@items('Loop_through_items')?['WorkerPosition']?['OnsiteCustom']",
+                              "FEEEARNER": "@{items('Loop_through_items')?['WorkerPositionFinancialDimension']?['FeeEarner']}",
+                              "REALTITLE": "@{items('Loop_through_items')?['WorkerPosition']?['TitleId']}",
+                              "FLOOR": "@{items('Loop_through_items')?['Floor']}",
+                              "PREFFIRSTNAME": "@{items('Loop_through_items')?['PreferredFirstName']}",
+                              "PREFLASTNAME": "@{items('Loop_through_items')?['PreferredLastName']}",
+                              "DISPLAYTEAM": "@{items('Loop_through_items')?['ProfessionalSuffix']}",
+                              "DISPLAYTITLE": "@{items('Loop_through_items')?['ProfessinalTitle']}",
+                              "RWACONSULTANTCODE": "@{items('Loop_through_items')?['WorkerNumber']}",
+                              "UPDATE_TIMESTAMP": "@{formatDateTime(items('Loop_through_items')?['WorkerDateTimeCreatedUpdated']?['UpdatedDateTime'], 'yyyy-MM-ddTHH:mm:ssZ')}",
+                              "CONSULTANTTYPE": "@{items('Loop_through_items')?['WorkerPositionFinancialDimension']?['ConsultantType']}",
+                              "CREATE_TIMESTAMP": "@{formatDateTime(items('Loop_through_items')?['WorkerDateTimeCreatedUpdated']?['CreatedDateTime'], 'yyyy-MM-ddTHH:mm:ssZ')}",
+                              "POSITION_START": "@{formatDateTime(items('Loop_through_items')?['WorkerPositionAssignment']?['ValidFrom'], 'yyyy-MM-dd')}",
+                              "POSITION_END": "@{formatDateTime(items('Loop_through_items')?['WorkerPositionAssignment']?['ValidTo'], 'yyyy-MM-dd')}",
+                              "LOCATION_CODE": "@{items('Loop_through_items')?['WorkerPosition']?['CompensationRegionId']}",
+                              "DEPARTMENT_CODE": "@{items('Loop_through_items')?['WorkerPosition']?['DepartmentNumber']}",
+                              "LOCATION_NAME": "@{items('Loop_through_items')?['WorkerPosition']?['LocationName']}",
+                              "DIVISION_NAME": "@{items('Loop_through_items')?['WorkerPosition']?['DivisionCustom']}",
+                              "DEPARTMENT_NAME": "@{items('Loop_through_items')?['WorkerPosition']?['DepartmentName']}",
+                              "CORPORATEMOBILE": "@{items('Loop_through_items')?['Mobile']}",
+                              "CORPORATEPHONE": "@{items('Loop_through_items')?['Phone']}",
+                              "CORPORATEPHONEEXT": "@{items('Loop_through_items')?['PhoneExt']}",
+                              "CORPORATEFAX": "@{items('Loop_through_items')?['Fax']}",
+                              "SALUTATION": "@{items('Loop_through_items')?['SALUTATION']}",
+                              "TERMINATIONDATE": "@{formatDateTime(items('Loop_through_items')?['WorkerEmploymentDetail']?['TransitionDate'], 'yyyy-MM-dd')}",
+                              "PRIMARY_POSITION_RECORD": "@items('Loop_through_items')?['WorkerPositionAssignment']?['IsPositionPrimary']",
+                              "PROBATION_END_DATE": "@{formatDateTime(variables('Probation Period'), 'yyyy-MM-dd')}",
+                              "RS_CODE": "@{items('Loop_through_items')?['WorkerPositionFinancialDimension']?['RsCode']}",
+                              "RS_ONSITE_EMAIL_ADDRESS": "@{items('Loop_through_items')?['EmailAddressOnSite']}"
+                            },
+                            "path": "/datasets/default/tables/@{encodeURIComponent(encodeURIComponent('[TALENT].[TALENT_STAFF]'))}/items/@{encodeURIComponent(encodeURIComponent(items('Loop_through_items')?['WorkerPositionAssignment']?['PositionId']))}"
+                          },
+                          "runAfter": {}
+                        }
+                      },
+                      "runAfter": {
+                        "Check_Employee_Detail_exist": [
+                          "Succeeded"
+                        ]
+                      },
+                      "else": {
+                        "actions": {
+                          "Insert_row": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                              "host": {
+                                "connection": {
+                                  "name": "@parameters('$connections')['oracle']['connectionId']"
+                                }
+                              },
+                              "method": "post",
+                              "body": {
+                                "TALENT_ID": "@{items('Loop_through_items')?['WorkerNumber']}",
+                                "POSITION_ID": "@{items('Loop_through_items')?['WorkerPositionAssignment']?['PositionId']}",
+                                "FIRSTNAME": "@{items('Loop_through_items')?['FirstName']}",
+                                "LASTNAME": "@{items('Loop_through_items')?['LastName']}",
+                                "DATEJOINED": "@{formatDateTime(items('Loop_through_items')?['SeniorityDate'], 'yyyy-MM-dd')}",
+                                "DATELEFT": "@{formatDateTime(items('Loop_through_items')?['WorkerEmploymentDetail']?['LastDateWorked'], 'yyyy-MM-dd')}",
+                                "JOBTITLE": "@{items('Loop_through_items')?['WorkerPositionFinancialDimension']?['JobTitle']}",
+                                "LINEMANAGER_POSITION_ID": "@{items('Loop_through_items')?['WorkerPositionHierarchy']?['ParentPositionId']}",
+                                "EMPLOYEESTATUS": "@{items('Loop_through_items')?['WorkerEmploymentTerm']?['AgreementTermId']}",
+                                "EMAILADDRESS": "@{items('Loop_through_items')?['EmailAddress']}",
+                                "GENDER": "@{items('Loop_through_items')?['Gender']}",
+                                "JOBLEVEL": "@{items('Loop_through_items')?['WorkerPositionFinancialDimension']?['JobLevel']}",
+                                "ONSITE": "@items('Loop_through_items')?['WorkerPosition']?['OnsiteCustom']",
+                                "FEEEARNER": "@{items('Loop_through_items')?['WorkerPositionFinancialDimension']?['FeeEarner']}",
+                                "REALTITLE": "@{items('Loop_through_items')?['WorkerPosition']?['TitleId']}",
+                                "FLOOR": "@{items('Loop_through_items')?['Floor']}",
+                                "PREFFIRSTNAME": "@{items('Loop_through_items')?['PreferredFirstName']}",
+                                "PREFLASTNAME": "@{items('Loop_through_items')?['PreferredLastName']}",
+                                "DISPLAYTEAM": "@{items('Loop_through_items')?['ProfessionalSuffix']}",
+                                "DISPLAYTITLE": "@{items('Loop_through_items')?['ProfessinalTitle']}",
+                                "RWACONSULTANTCODE": "@{items('Loop_through_items')?['WorkerNumber']}",
+                                "UPDATE_TIMESTAMP": "@{formatDateTime(items('Loop_through_items')?['WorkerDateTimeCreatedUpdated']?['UpdatedDateTime'], 'yyyy-MM-ddTHH:mm:ssZ')}",
+                                "CONSULTANTTYPE": "@{items('Loop_through_items')?['WorkerPositionFinancialDimension']?['ConsultantType']}",
+                                "CREATE_TIMESTAMP": "@{formatDateTime(items('Loop_through_items')?['WorkerDateTimeCreatedUpdated']?['CreatedDateTime'], 'yyyy-MM-ddTHH:mm:ssZ')}",
+                                "POSITION_START": "@{formatDateTime(items('Loop_through_items')?['WorkerPositionAssignment']?['ValidFrom'], 'yyyy-MM-dd')}",
+                                "POSITION_END": "@{formatDateTime(items('Loop_through_items')?['WorkerPositionAssignment']?['ValidTo'], 'yyyy-MM-dd')}",
+                                "LOCATION_CODE": "@{items('Loop_through_items')?['WorkerPosition']?['CompensationRegionId']}",
+                                "DEPARTMENT_CODE": "@{items('Loop_through_items')?['WorkerPosition']?['DepartmentNumber']}",
+                                "LOCATION_NAME": "@{items('Loop_through_items')?['WorkerPosition']?['LocationName']}",
+                                "DIVISION_NAME": "@{items('Loop_through_items')?['WorkerPosition']?['DivisionCustom']}",
+                                "DEPARTMENT_NAME": "@{items('Loop_through_items')?['WorkerPosition']?['DepartmentName']}",
+                                "CORPORATEMOBILE": "@{items('Loop_through_items')?['Mobile']}",
+                                "CORPORATEPHONE": "@{items('Loop_through_items')?['Phone']}",
+                                "CORPORATEPHONEEXT": "@{items('Loop_through_items')?['PhoneExt']}",
+                                "CORPORATEFAX": "@{items('Loop_through_items')?['Fax']}",
+                                "SALUTATION": "@{items('Loop_through_items')?['SALUTATION']}",
+                                "TERMINATIONDATE": "@{formatDateTime(items('Loop_through_items')?['WorkerEmploymentDetail']?['TransitionDate'], 'yyyy-MM-dd')}",
+                                "PRIMARY_POSITION_RECORD": "@items('Loop_through_items')?['WorkerPositionAssignment']?['IsPositionPrimary']",
+                                "PROBATION_END_DATE": "@{formatDateTime(variables('Probation Period'), 'yyyy-MM-dd')}",
+                                "RS_CODE": "@{items('Loop_through_items')?['WorkerPositionFinancialDimension']?['RsCode']}",
+                                "RS_ONSITE_EMAIL_ADDRESS": "@{items('Loop_through_items')?['EmailAddressOnSite']}"
+                              },
+                              "path": "/datasets/default/tables/@{encodeURIComponent(encodeURIComponent('[TALENT].[TALENT_STAFF]'))}/items"
+                            },
+                            "runAfter": {}
+                          }
+                        }
+                      }
+                    },
+                    "Complete_worker_position": {
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@items('Loop_through_items')?['WorkerPosition']",
+                                "@null"
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Execute_Position_Staging_stored_procedure": {
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['sql']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "body": {
+                              "EXECUTIONID": "@{items('Loop_through_items')?['WorkerPosition']?['ExecutionIdPosition']}",
+                              "PARTITION": "@{items('Loop_through_items')?['WorkerPosition']?['PartitionPosition']}",
+                              "POSITIONID": "@{items('Loop_through_items')?['WorkerPosition']?['PositionId']}"
+                            },
+                            "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sqlServerName')))},@{encodeURIComponent(encodeURIComponent(parameters('sqlDatabaseName')))}/procedures/@{encodeURIComponent(encodeURIComponent('[dbo].[usp_flag_processed_HcmPositionV2Staging]'))}"
+                          },
+                          "runAfter": {}
+                        }
+                      },
+                      "runAfter": {
+                        "Check_worker_position_assignment": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Complete_worker_employment_detail": {
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@items('Loop_through_items')?['WorkerEmploymentDetail']",
+                                "@null"
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Execute_Employment_detail_stored_procedure": {
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['sql']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "body": {
+                              "EMPLOYMENTENDDATE": "@{formatDateTime(items('Loop_through_items')?['WorkerEmploymentDetail']?['EmploymentEndDate'], 'yyyy-MM-ddTHH:mm:ssZ')}",
+                              "EMPLOYMENTSTARTDATE": "@{formatDateTime(items('Loop_through_items')?['WorkerEmploymentDetail']?['EmploymentStartDate'], 'yyyy-MM-ddTHH:mm:ssZ')}",
+                              "EXECUTIONID": "@{items('Loop_through_items')?['WorkerEmploymentDetail']?['ExecutionIdEmpDetail']}",
+                              "LEGALENTITYID": "@{items('Loop_through_items')?['WorkerEmploymentDetail']?['LegalEntityId']}",
+                              "PARTITION": "@{items('Loop_through_items')?['WorkerEmploymentDetail']?['PartitionEmpDetail']}",
+                              "PERSONNELNUMBER": "@{items('Loop_through_items')?['WorkerNumber']}",
+                              "VALIDFROM": "@{formatDateTime(items('Loop_through_items')?['WorkerEmploymentDetail']?['ValidFrom'], 'yyyy-MM-ddTHH:mm:ssZ')}",
+                              "VALIDTO": "@{formatDateTime(items('Loop_through_items')?['WorkerEmploymentDetail']?['ValidTo'], 'yyyy-MM-ddTHH:mm:ssZ')}"
+                            },
+                            "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sqlServerName')))},@{encodeURIComponent(encodeURIComponent(parameters('sqlDatabaseName')))}/procedures/@{encodeURIComponent(encodeURIComponent('[dbo].[usp_flag_processed_HcmEmploymentDetailStaging]'))}"
+                          },
+                          "runAfter": {}
+                        }
+                      },
+                      "runAfter": {
+                        "Complete_worker_position": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Complete_worker_position_financial_dimension": {
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@items('Loop_through_items')?['WorkerPositionFinancialDimension']",
+                                "@null"
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Execute_Pos_FD_stored_procedure": {
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['sql']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "body": {
+                              "DATAAREAID": "@{items('Loop_through_items')?['WorkerPositionFinancialDimension']?['LegalEntityId']}",
+                              "EXECUTIONID": "@{items('Loop_through_items')?['WorkerPositionFinancialDimension']?['ExecutionIdPositionFD']}",
+                              "LEGALENTITYDATAAREA": "@{items('Loop_through_items')?['WorkerPositionFinancialDimension']?['LegalEntityDataArea']}",
+                              "PARTITION": "@{items('Loop_through_items')?['WorkerPositionFinancialDimension']?['PartitionPositionFD']}",
+                              "POSITIONID": "@{items('Loop_through_items')?['WorkerPositionFinancialDimension']?['PositionId']}"
+                            },
+                            "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sqlServerName')))},@{encodeURIComponent(encodeURIComponent(parameters('sqlDatabaseName')))}/procedures/@{encodeURIComponent(encodeURIComponent('[dbo].[usp_flag_processed_HcmPositionDefaultDimensionStaging]'))}"
+                          },
+                          "runAfter": {}
+                        }
+                      },
+                      "runAfter": {
+                        "Complete_worker_employment_detail": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Complete_worker_position_hierarchy": {
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@items('Loop_through_items')?['WorkerPositionHierarchy']",
+                                "@null"
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Execute_Position_hierarchy_stored_procedure": {
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['sql']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "body": {
+                              "EXECUTIONID": "@{items('Loop_through_items')?['WorkerPositionHierarchy']?['ExecutionIdPositionHierarchy']}",
+                              "HIERARCHYTYPENAME": "@{items('Loop_through_items')?['WorkerPositionHierarchy']?['HierarchyTypeName']}",
+                              "PARTITION": "@{items('Loop_through_items')?['WorkerPositionHierarchy']?['PartitionPositionHierarchy']}",
+                              "POSITIONID": "@{items('Loop_through_items')?['WorkerPositionHierarchy']?['PositionId']}",
+                              "VALIDFROM": "@{formatDateTime(items('Loop_through_items')?['WorkerPositionHierarchy']?['ValidFrom'], 'yyyy-MM-ddTHH:mm:ssZ')}",
+                              "VALIDTO": "@{formatDateTime(items('Loop_through_items')?['WorkerPositionHierarchy']?['ValidTo'], 'yyyy-MM-ddTHH:mm:ssZ')}"
+                            },
+                            "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sqlServerName')))},@{encodeURIComponent(encodeURIComponent(parameters('sqlDatabaseName')))}/procedures/@{encodeURIComponent(encodeURIComponent('[dbo].[usp_flag_processed_HcmPositionHierarchyStaging]'))}"
+                          },
+                          "runAfter": {}
+                        }
+                      },
+                      "runAfter": {
+                        "Complete_worker_position_financial_dimension": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Complete_worker_employment_term": {
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@items('Loop_through_items')?['WorkerEmploymentTerm']",
+                                "@null"
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Execute_Employment_term_stored_procedure": {
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['sql']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "body": {
+                              "AGREEMENTTERMID": "@{items('Loop_through_items')?['WorkerEmploymentTerm']?['AgreementTermId']}",
+                              "EMPLOYMENTENDDATE": "@{formatDateTime(items('Loop_through_items')?['WorkerEmploymentTerm']?['EmploymentEndDate'], 'yyyy-MM-ddTHH:mm:ssZ')}",
+                              "EMPLOYMENTSTARTDATE": "@{formatDateTime(items('Loop_through_items')?['WorkerEmploymentTerm']?['EmploymentStartDate'], 'yyyy-MM-ddTHH:mm:ssZ')}",
+                              "EXECUTIONID": "@{items('Loop_through_items')?['WorkerEmploymentTerm']?['ExecutionEmpTerm']}",
+                              "LEGALENTITYID": "@{items('Loop_through_items')?['WorkerEmploymentTerm']?['LegalEntityId']}",
+                              "PARTITION": "@{items('Loop_through_items')?['WorkerEmploymentTerm']?['PartitionEmpTerm']}",
+                              "PERSONNELNUMBER": "@{items('Loop_through_items')?['WorkerNumber']}",
+                              "VALIDFROM": "@{formatDateTime(items('Loop_through_items')?['WorkerEmploymentTerm']?['ValidFrom'], 'yyyy-MM-ddTHH:mm:ssZ')}",
+                              "VALIDTO": "@{formatDateTime(items('Loop_through_items')?['WorkerEmploymentTerm']?['ValidTo'], 'yyyy-MM-ddTHH:mm:ssZ')}"
+                            },
+                            "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sqlServerName')))},@{encodeURIComponent(encodeURIComponent(parameters('sqlDatabaseName')))}/procedures/@{encodeURIComponent(encodeURIComponent('[dbo].[usp_flag_processed_HcmEmploymentTermStaging]'))}"
+                          },
+                          "runAfter": {}
+                        }
+                      },
+                      "runAfter": {
+                        "Complete_worker_position_hierarchy": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Check_worker_position_assignment": {
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@items('Loop_through_items')?['WorkerPositionAssignment']",
+                                "@null"
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Execute_worker_assignment_stored_procedure": {
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['sql']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "body": {
+                              "EXECUTIONID": "@{items('Loop_through_items')?['WorkerPositionAssignment']?['ExecutionIdPositionAssign']}",
+                              "PARTITION": "@{items('Loop_through_items')?['WorkerPositionAssignment']?['PartitionPositionAssign']}",
+                              "POSITIONID": "@{items('Loop_through_items')?['WorkerPositionAssignment']?['PositionId']}",
+                              "VALIDFROM": "@{formatDateTime(items('Loop_through_items')?['WorkerPositionAssignment']?['ValidFrom'], 'yyyy-MM-ddTHH:mm:ssZ')}",
+                              "VALIDTO": "@{formatDateTime(items('Loop_through_items')?['WorkerPositionAssignment']?['ValidTo'], 'yyyy-MM-ddTHH:mm:ssZ')}"
+                            },
+                            "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sqlServerName')))},@{encodeURIComponent(encodeURIComponent(parameters('sqlDatabaseName')))}/procedures/@{encodeURIComponent(encodeURIComponent('[dbo].[usp_flag_processed_HcmPositionWorkerAssignmentStaging]'))}"
+                          },
+                          "runAfter": {}
+                        }
+                      },
+                      "runAfter": {
+                        "Execute_Worker_Staging_stored_procedure_complete": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Check_Employee_Detail_exist": {
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@items('Loop_through_items')?['EmployeeDetail']",
+                                "@null"
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Set_Probation_Period_variable": {
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "Probation Period",
+                            "value": "@{items('Loop_through_items')?['EmployeeDetail']?['ProbationPeriod']}"
+                          },
+                          "runAfter": {}
+                        }
+                      },
+                      "runAfter": {
+                        "Reset_Probation_Period_variable": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Reset_Probation_Period_variable": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "Probation Period",
+                        "value": "2154-12-31T23:59:59"
+                      },
+                      "runAfter": {
+                        "Get_worker_position": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Complete_worker_employee_detail": {
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@items('Loop_through_items')?['EmployeeDetail']",
+                                "@null"
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Execute_Employee_detail_stored_procedure": {
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['sql']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "body": {
+                              "EMPLOYMENTENDDATE": "@{formatDateTime(items('Loop_through_items')?['EmployeeDetail']?['EmploymentEndDate'], 'yyyy-MM-ddTHH:mm:ssZ')}",
+                              "EMPLOYMENTSTARTDATE": "@{formatDateTime(items('Loop_through_items')?['EmployeeDetail']?['EmploymentStartDate'], 'yyyy-MM-ddTHH:mm:ssZ')}",
+                              "EXECUTIONID": "@{items('Loop_through_items')?['EmployeeDetail']?['ExecutionId']}",
+                              "LEGALENTITYID": "@{items('Loop_through_items')?['EmployeeDetail']?['LegalEntityId']}",
+                              "PARTITION": "@{items('Loop_through_items')?['EmployeeDetail']?['Partition']}",
+                              "PERSONNELNUMBER": "@{items('Loop_through_items')?['WorkerNumber']}",
+                              "VALIDFROM": "@{formatDateTime(items('Loop_through_items')?['EmployeeDetail']?['ValidFrom'], 'yyyy-MM-ddTHH:mm:ssZ')}",
+                              "VALIDTO": "@{formatDateTime(items('Loop_through_items')?['EmployeeDetail']?['ValidTo'], 'yyyy-MM-ddTHH:mm:ssZ')}"
+                            },
+                            "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sqlServerName')))},@{encodeURIComponent(encodeURIComponent(parameters('sqlDatabaseName')))}/procedures/@{encodeURIComponent(encodeURIComponent('[dbo].[usp_flag_processed_HcmEmploymentEmployeeStaging]'))}"
+                          },
+                          "runAfter": {}
+                        }
+                      },
+                      "runAfter": {
+                        "Complete_worker_employment_term": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Execute_Worker_Staging_stored_procedure_complete": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['sql']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "body": {
+                          "EXECUTIONID": "@{items('Loop_through_items')?['ExecutionIdWorker']}",
+                          "PARTITION": "@{items('Loop_through_items')?['PartitionWorker']}",
+                          "PERSONNELNUMBER": "@{items('Loop_through_items')?['WorkerNumber']}"
+                        },
+                        "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sqlServerName')))},@{encodeURIComponent(encodeURIComponent(parameters('sqlDatabaseName')))}/procedures/@{encodeURIComponent(encodeURIComponent('[dbo].[usp_flag_processed_HcmWorkerStaging]'))}"
+                      },
+                      "runAfter": {
+                        "Check_worker_position_status": [
+                          "Succeeded"
+                        ]
+                      }
+                    }
+                  },
+                  "runAfter": {},
+                  "runtimeConfiguration": {
+                    "concurrency": {
+                      "repetitions": 1
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "var_ProbationPeriod": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Check_Oracle_BYOD_scope_status": {
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "not": {
+                      "equals": [
+                        "@result('Oracle_BYOD_Scope')[0]['status']",
+                        "Succeeded"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "actions": {
+                "Error_handling_email": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['office365_1']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "body": {
+                      "To": "@{parameters('supportEmailAddress')}",
+                      "Subject": "Error occurred on @{parameters('logicAppName')} workflow running in Azure",
+                      "Body": "Hello Support\n\nAn error occurred during the processing of records received from MIS service bus queue. This error happened inside the loop through JSON payload.\nPlease investigate this issue in Azure. The workflow project is called @{parameters('logicAppName')}.\n\nOnce this problem has been resolved the record will be re-discovered and should be processed successfully.\n\nThank you\n"
+                    },
+                    "path": "/Mail"
+                  },
+                  "runAfter": {}
+                }
+              },
+              "runAfter": {
+                "Oracle_BYOD_Scope": [
+                  "Succeeded",
+                  "TimedOut",
+                  "Skipped",
+                  "Failed"
+                ]
+              }
+            },
+            "var_ProbationPeriod": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Probation Period",
+                    "type": "String",
+                    "value": "@{null}"
+                  }
+                ]
+              },
+              "runAfter": {}
+            }
+          },
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            },
+            "logicAppName": {
+              "type": "String",
+              "defaultValue": "[parameters('logicAppName')]"
+            },
+            "sqlServerName": {
+              "type": "String",
+              "defaultValue": "[parameters('SqlServerName')]"
+            },
+            "sqlDatabaseName": {
+              "type": "String",
+              "defaultValue": "[parameters('SqlDatabaseName')]"
+            },
+            "supportEmailAddress": {
+              "type": "String",
+              "defaultValue": "[parameters('SupportEmailAddress')]"
+            }
+          },
+          "triggers": {
+            "manual": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "schema": {
+                  "items": {
+                    "type": "array"
+                  },
+                  "querySubject": {
+                    "type": "string"
+                  },
+                  "required": [
+                    "items",
+                    "querySubject"
+                  ],
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "contentVersion": "1.0.0.0",
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "oracle": {
+                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'oracle')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('oracle_1_Connection_Name'))]",
+                "connectionName": "[parameters('oracle_1_Connection_Name')]"
+              },
+              "sql": {
+                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'sql')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('sql_1_Connection_Name'))]",
+                "connectionName": "[parameters('sql_1_Connection_Name')]"
+              },
+              "office365_1": {
+                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'office365')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('office365_1_Connection_Name'))]",
+                "connectionName": "[parameters('office365_1_Connection_Name')]"
+              }
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', parameters('oracle_1_Connection_Name'))]",
+        "[resourceId('Microsoft.Web/connections', parameters('sql_1_Connection_Name'))]",
+        "[resourceId('Microsoft.Web/connections', parameters('office365_1_Connection_Name'))]"
+      ]
+    },
+    {
+      "type": "MICROSOFT.WEB/CONNECTIONS",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('oracle_1_Connection_Name')]",
+      "location": "[parameters('logicAppLocation')]",
+      "properties": {
+        "api": {
+          "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'oracle')]"
+        },
+        "displayName": "[parameters('oracle_1_Connection_DisplayName')]",
+        "parameterValues": {
+          "server": "[parameters('oracle_1_server')]",
+          "authType": "[parameters('oracle_1_authType')]",
+          "username": "[parameters('oracle_1_username')]",
+          "password": "[parameters('oracle_1_password')]",
+          "gateway": {
+            "id": "[parameters('oracle_1_gateway_id')]"
+          }
+        }
+      }
+    },
+    {
+      "type": "MICROSOFT.WEB/CONNECTIONS",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('sql_1_Connection_Name')]",
+      "location": "[parameters('logicAppLocation')]",
+      "properties": {
+        "api": {
+          "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'sql')]"
+        },
+        "displayName": "[parameters('sql_1_Connection_DisplayName')]",
+        "parameterValues": {
+          "server": "[parameters('sql_1_server')]",
+          "database": "[parameters('sql_1_database')]",
+          "username": "[parameters('sql_1_username')]",
+          "password": "[parameters('sql_1_password')]",
+          "sqlConnectionString": "[parameters('sql_1_sqlConnectionString')]"
+        }
+      }
+    },
+    {
+      "type": "MICROSOFT.WEB/CONNECTIONS",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('office365_1_Connection_Name')]",
+      "location": "[parameters('logicAppLocation')]",
+      "properties": {
+        "api": {
+          "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'office365')]"
+        },
+        "displayName": "[parameters('office365_1_Connection_DisplayName')]"
+      }
+    }
+  ],
+  "outputs": {}
+}

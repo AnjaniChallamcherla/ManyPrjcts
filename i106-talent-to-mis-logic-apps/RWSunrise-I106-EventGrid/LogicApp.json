@@ -1,0 +1,543 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "logicAppName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "metadata": {
+        "description": "Name of the Logic App."
+      },
+      "defaultValue": ""
+    },
+    "SupportEmailAddress": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Email address that will receive error alert"
+      },
+      "defaultValue": ""
+    },
+    "TotalItemBatch": {
+      "type": "int",
+      "metadata": {
+        "description": "The total value that will be batch per message that is sent to service bus queue"
+      },
+      "defaultValue": 0
+    },
+    "ServiceBusQueueName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Service Bus queue name"
+      },
+      "defaultValue": ""
+    },
+    "logicAppLocation": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "allowedValues": [
+        "[resourceGroup().location]",
+        "eastasia",
+        "southeastasia",
+        "centralus",
+        "eastus",
+        "eastus2",
+        "westus",
+        "northcentralus",
+        "southcentralus",
+        "northeurope",
+        "westeurope",
+        "japanwest",
+        "japaneast",
+        "brazilsouth",
+        "australiaeast",
+        "australiasoutheast",
+        "southindia",
+        "centralindia",
+        "westindia",
+        "canadacentral",
+        "canadaeast",
+        "uksouth",
+        "ukwest",
+        "westcentralus",
+        "westus2",
+        "koreacentral",
+        "koreasouth",
+        "francecentral",
+        "francesouth"
+      ],
+      "metadata": {
+        "description": "Location of the Logic App."
+      }
+    },
+    "servicebus_1_Connection_Name": {
+      "type": "string",
+      "defaultValue": "servicebus"
+    },
+    "servicebus_1_Connection_DisplayName": {
+      "type": "string",
+      "defaultValue": "RWSunrise"
+    },
+    "servicebus_1_connectionString": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Azure Service Bus Connection String"
+      }
+    },
+    "azureeventgrid_1_Connection_Name": {
+      "type": "string",
+      "defaultValue": "azureeventgrid"
+    },
+    "azureeventgrid_1_Connection_DisplayName": {
+      "type": "string",
+      "defaultValue": "d365service@robertwalters.com"
+    },
+    "office365_1_Connection_Name": {
+      "type": "string",
+      "defaultValue": "office365"
+    },
+    "office365_1_Connection_DisplayName": {
+      "type": "string",
+      "defaultValue": "ERPservicealerts@robertwalters.com"
+    }
+  },
+  "variables": {},
+  "resources": [
+    {
+      "name": "[parameters('logicAppName')]",
+      "type": "Microsoft.Logic/workflows",
+      "location": "[parameters('logicAppLocation')]",
+      "tags": {
+        "displayName": "LogicApp"
+      },
+      "apiVersion": "2016-06-01",
+      "properties": {
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "actions": {
+            "var_ProcessingPlaceholder": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Processing Placeholder",
+                    "type": "Array"
+                  }
+                ]
+              },
+              "runAfter": {}
+            },
+            "var_SkipProcessingPlaceholder": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Skip Processing Placeholder",
+                    "type": "Array"
+                  }
+                ]
+              },
+              "runAfter": {
+                "var_ProcessingPlaceholder": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "var_TakeProcessingPlaceholder": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Take Processing Placeholder",
+                    "type": "Array"
+                  }
+                ]
+              },
+              "runAfter": {
+                "var_SkipProcessingPlaceholder": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "var_Counter": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Counter",
+                    "type": "Integer",
+                    "value": 0
+                  }
+                ]
+              },
+              "runAfter": {
+                "var_TakeProcessingPlaceholder": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "var_BatchItemNo": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Batch Item No",
+                    "type": "Integer",
+                    "value": "@parameters('totalItemBatch')"
+                  }
+                ]
+              },
+              "runAfter": {
+                "var_Counter": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Event_Scope": {
+              "type": "Scope",
+              "actions": {
+                "Confirm_data_items_are_present": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "greater": [
+                          "@length(triggerBody()['data'])",
+                          0
+                        ]
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Until": {
+                      "type": "Until",
+                      "expression": "@equals(variables('Counter'), length(triggerBody()['data']))",
+                      "limit": {
+                        "count": 60,
+                        "timeout": "PT1H"
+                      },
+                      "actions": {
+                        "Does_the_Processing_placeholder_has_any_items_yet": {
+                          "type": "If",
+                          "expression": {
+                            "and": [
+                              {
+                                "greater": [
+                                  "@length(variables('Processing Placeholder'))",
+                                  0
+                                ]
+                              }
+                            ]
+                          },
+                          "actions": {
+                            "Set_Skip_processing_by_current_counter": {
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "Skip Processing Placeholder",
+                                "value": "@skip(triggerBody()['data'], variables('Counter'))"
+                              },
+                              "runAfter": {}
+                            },
+                            "Set_Take_processing_by_taking_skip": {
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "Take Processing Placeholder",
+                                "value": "@take(variables('Skip Processing Placeholder'), variables('Batch Item No'))"
+                              },
+                              "runAfter": {
+                                "Set_Skip_processing_by_current_counter": [
+                                  "Succeeded"
+                                ]
+                              }
+                            },
+                            "Send_message_2": {
+                              "type": "ApiConnection",
+                              "inputs": {
+                                "host": {
+                                  "connection": {
+                                    "name": "@parameters('$connections')['servicebus']['connectionId']"
+                                  }
+                                },
+                                "method": "post",
+                                "body": {
+                                  "SessionId": "@{guid()}",
+                                  "ContentData": "@{base64(variables('Take Processing Placeholder'))}",
+                                  "MessageId": "@triggerBody()?['subject']"
+                                },
+                                "path": "/@{encodeURIComponent(encodeURIComponent(parameters('serviceBusQueueName')))}/messages",
+                                "queries": {
+                                  "systemProperties": "None"
+                                }
+                              },
+                              "runAfter": {
+                                "Set_Take_processing_by_taking_skip": [
+                                  "Succeeded"
+                                ]
+                              }
+                            },
+                            "For_each": {
+                              "type": "Foreach",
+                              "foreach": "@variables('Take Processing Placeholder')",
+                              "actions": {
+                                "Append_to_Processing_placeholder_variable": {
+                                  "type": "AppendToArrayVariable",
+                                  "inputs": {
+                                    "name": "Processing Placeholder",
+                                    "value": "@items('For_each')"
+                                  },
+                                  "runAfter": {}
+                                }
+                              },
+                              "runAfter": {
+                                "Send_message_2": [
+                                  "Succeeded"
+                                ]
+                              }
+                            },
+                            "Set_Counter": {
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "Counter",
+                                "value": "@length(variables('Processing Placeholder'))"
+                              },
+                              "runAfter": {
+                                "For_each": [
+                                  "Succeeded"
+                                ]
+                              }
+                            }
+                          },
+                          "runAfter": {},
+                          "else": {
+                            "actions": {
+                              "Set_Processing_Placeholder": {
+                                "type": "SetVariable",
+                                "inputs": {
+                                  "name": "Processing Placeholder",
+                                  "value": "@take(triggerBody()['data'], variables('Batch Item No'))"
+                                },
+                                "runAfter": {}
+                              },
+                              "Send_message": {
+                                "type": "ApiConnection",
+                                "inputs": {
+                                  "host": {
+                                    "connection": {
+                                      "name": "@parameters('$connections')['servicebus']['connectionId']"
+                                    }
+                                  },
+                                  "method": "post",
+                                  "body": {
+                                    "SessionId": "@{guid()}",
+                                    "ContentData": "@{base64(variables('Processing Placeholder'))}",
+                                    "MessageId": "@triggerBody()?['subject']"
+                                  },
+                                  "path": "/@{encodeURIComponent(encodeURIComponent(parameters('serviceBusQueueName')))}/messages",
+                                  "queries": {
+                                    "systemProperties": "None"
+                                  }
+                                },
+                                "runAfter": {
+                                  "Set_Processing_Placeholder": [
+                                    "Succeeded"
+                                  ]
+                                }
+                              },
+                              "Set_Counter_length": {
+                                "type": "SetVariable",
+                                "inputs": {
+                                  "name": "Counter",
+                                  "value": "@length(variables('Processing Placeholder'))"
+                                },
+                                "runAfter": {
+                                  "Send_message": [
+                                    "Succeeded"
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "runAfter": {}
+                    }
+                  },
+                  "runAfter": {}
+                }
+              },
+              "runAfter": {
+                "var_BatchItemNo": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Confirm_status_of_Event_Scope": {
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "not": {
+                      "equals": [
+                        "@result('Event_Scope')[0]['status']",
+                        "Succeeded"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "actions": {
+                "Send_an_email": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['office365_1']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "body": {
+                      "To": "@{parameters('supportEmailAddress')}",
+                      "Subject": "Error occurred on @{parameters('logicAppName')} workflow running in Azure",
+                      "Body": "Hello Support\n\nAn error occurred during the receiver of events from Event Grid Topic. This workflow is triggered when messages are sent to the grid. These messages are push into a service bus queue.\nPlease investigate this issue in Azure. The workflow project is called @{parameters('logicAppName')} acts as the entry point for the talent to MIS integraion.\n\nOnce this problem has been resolved the record will be re-discovered and should be processed successfully.\n\nThank you"
+                    },
+                    "path": "/Mail"
+                  },
+                  "runAfter": {}
+                }
+              },
+              "runAfter": {
+                "Event_Scope": [
+                  "Succeeded",
+                  "Failed",
+                  "TimedOut",
+                  "Skipped"
+                ]
+              }
+            }
+          },
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            },
+            "logicAppName": {
+              "type": "String",
+              "defaultValue": "[parameters('logicAppName')]"
+            },
+            "supportEmailAddress": {
+              "type": "String",
+              "defaultValue": "[parameters('SupportEmailAddress')]"
+            },
+            "totalItemBatch": {
+              "type": "Int",
+              "defaultValue": "[parameters('TotalItemBatch')]"
+            },
+            "serviceBusQueueName": {
+              "type": "String",
+              "defaultValue": "[parameters('ServiceBusQueueName')]"
+            }
+          },
+          "triggers": {
+            "When_a_resource_event_occurs": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azureeventgrid']['connectionId']"
+                  }
+                },
+                "body": {
+                  "properties": {
+                    "topic": "/subscriptions/51132d16-72f5-491f-90db-30b922b816e6/resourceGroups/RW-RG-NE-Events/providers/Microsoft.EventGrid/topics/RWSunriseEG-PROD",
+                    "destination": {
+                      "endpointType": "webhook",
+                      "properties": {
+                        "endpointUrl": "@{listCallbackUrl()}"
+                      }
+                    }
+                  }
+                },
+                "path": "/subscriptions/@{encodeURIComponent('51132d16-72f5-491f-90db-30b922b816e6')}/providers/@{encodeURIComponent('Microsoft.EventGrid.Topics')}/resource/eventSubscriptions",
+                "queries": {
+                  "x-ms-api-version": "2017-09-15-preview",
+                  "subscriptionName": "RWSunrisei106-TalentBYOD-To-MIS"
+                }
+              },
+              "splitOn": "@triggerBody()"
+            }
+          },
+          "contentVersion": "1.0.0.0",
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "servicebus": {
+                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'servicebus')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('servicebus_1_Connection_Name'))]",
+                "connectionName": "[parameters('servicebus_1_Connection_Name')]"
+              },
+              "office365_1": {
+                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'office365')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('office365_1_Connection_Name'))]",
+                "connectionName": "[parameters('office365_1_Connection_Name')]"
+              },
+              "azureeventgrid": {
+                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'azureeventgrid')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('azureeventgrid_1_Connection_Name'))]",
+                "connectionName": "[parameters('azureeventgrid_1_Connection_Name')]"
+              }
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', parameters('servicebus_1_Connection_Name'))]",
+        "[resourceId('Microsoft.Web/connections', parameters('office365_1_Connection_Name'))]",
+        "[resourceId('Microsoft.Web/connections', parameters('azureeventgrid_1_Connection_Name'))]"
+      ]
+    },
+    {
+      "type": "MICROSOFT.WEB/CONNECTIONS",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('servicebus_1_Connection_Name')]",
+      "location": "[parameters('logicAppLocation')]",
+      "properties": {
+        "api": {
+          "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'servicebus')]"
+        },
+        "displayName": "[parameters('servicebus_1_Connection_DisplayName')]",
+        "parameterValues": {
+          "connectionString": "[parameters('servicebus_1_connectionString')]"
+        }
+      }
+    },
+    {
+      "type": "MICROSOFT.WEB/CONNECTIONS",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('azureeventgrid_1_Connection_Name')]",
+      "location": "[parameters('logicAppLocation')]",
+      "properties": {
+        "api": {
+          "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'azureeventgrid')]"
+        },
+        "displayName": "[parameters('azureeventgrid_1_Connection_DisplayName')]"
+      }
+    },
+    {
+      "type": "MICROSOFT.WEB/CONNECTIONS",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('office365_1_Connection_Name')]",
+      "location": "[parameters('logicAppLocation')]",
+      "properties": {
+        "api": {
+          "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'office365')]"
+        },
+        "displayName": "[parameters('office365_1_Connection_DisplayName')]"
+      }
+    }
+  ],
+  "outputs": {}
+}
